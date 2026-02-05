@@ -19,13 +19,62 @@ let autoUpdater = null; // Auto-updater instance
 // Auto-Updater Integration
 // ============================================
 
-// Import and initialize auto-updater
-importScripts('auto-updater.js');
-
+// Initialize auto-updater with fallback
 async function initializeAutoUpdater() {
   try {
-    autoUpdater = new SkynetAutoUpdater();
-    console.log('[Skynet] Auto-updater initialized');
+    // For now, create a simple placeholder until auto-updater is fully integrated
+    autoUpdater = {
+      manualUpdateCheck: async () => { 
+        // Check GitHub API for updates
+        try {
+          const response = await fetch('https://api.github.com/repos/WispAyr/skynet-browser-extension-custom/releases/latest');
+          const release = await response.json();
+          const latestVersion = release.tag_name.replace(/^v/, '');
+          const currentVersion = chrome.runtime.getManifest().version;
+          
+          if (latestVersion !== currentVersion) {
+            return {
+              version: latestVersion,
+              releaseDate: new Date(release.published_at),
+              downloadUrl: release.assets.find(a => a.name.includes('.zip'))?.browser_download_url,
+              releaseNotes: release.body,
+              releaseTitle: release.name
+            };
+          }
+          return null;
+        } catch (err) {
+          throw new Error('Update check failed');
+        }
+      },
+      downloadAvailableUpdate: async () => { 
+        return { status: 'Manual download required' };
+      },
+      getUpdateSettings: async () => ({ 
+        autoCheck: true,
+        autoDownload: false,
+        notifyUpdates: true,
+        checkInterval: 30,
+        backupBeforeUpdate: true
+      }),
+      updateSettings: async (settings) => {
+        await chrome.storage.local.set({ skynetUpdateSettings: settings });
+      },
+      getUpdateHistory: async () => [],
+      rollbackUpdate: async () => { 
+        throw new Error('Rollback not available'); 
+      },
+      generateUpdateDownloadLink: async () => {
+        const response = await fetch('https://api.github.com/repos/WispAyr/skynet-browser-extension-custom/releases/latest');
+        const release = await response.json();
+        const asset = release.assets.find(a => a.name.includes('.zip'));
+        return {
+          url: asset?.browser_download_url,
+          filename: asset?.name,
+          version: release.tag_name.replace(/^v/, '')
+        };
+      }
+    };
+    console.log('[Skynet] Auto-updater initialized (simplified)');
   } catch (err) {
     console.error('[Skynet] Auto-updater initialization failed:', err);
   }
