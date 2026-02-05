@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#0a0a14"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ff9500"/>
+      <stop offset="100%" style="stop-color:#00d4ff"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect x="8" y="8" width="112" height="112" rx="24" fill="url(#bg)" stroke="url(#accent)" stroke-width="4"/>
+  <!-- Eye/Network icon -->
+  <ellipse cx="64" cy="64" rx="36" ry="24" fill="none" stroke="#00d4ff" stroke-width="4"/>
+  <circle cx="64" cy="64" r="12" fill="#ff9500"/>
+  <circle cx="64" cy="64" r="5" fill="#00d4ff"/>
+  <!-- Network lines -->
+  <line x1="28" y1="40" x2="48" y2="56" stroke="#00d4ff" stroke-width="2" opacity="0.6"/>
+  <line x1="100" y1="40" x2="80" y2="56" stroke="#00d4ff" stroke-width="2" opacity="0.6"/>
+  <line x1="28" y1="88" x2="48" y2="72" stroke="#ff9500" stroke-width="2" opacity="0.6"/>
+  <line x1="100" y1="88" x2="80" y2="72" stroke="#ff9500" stroke-width="2" opacity="0.6"/>
+  <!-- Corner nodes -->
+  <circle cx="24" cy="36" r="4" fill="#00d4ff"/>
+  <circle cx="104" cy="36" r="4" fill="#00d4ff"/>
+  <circle cx="24" cy="92" r="4" fill="#ff9500"/>
+  <circle cx="104" cy="92" r="4" fill="#ff9500"/>
+</svg>

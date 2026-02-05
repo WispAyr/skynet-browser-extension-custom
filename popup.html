@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=400">
+  <title>Skynet Browser Manager</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="lcars-container">
+    <!-- Header -->
+    <header class="lcars-header">
+      <div class="lcars-elbow-left"></div>
+      <div class="lcars-title">
+        <span class="title-text">SKYNET BROWSER</span>
+        <span class="subtitle">CONTROL INTERFACE</span>
+      </div>
+      <div class="lcars-elbow-right"></div>
+    </header>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-indicator">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">INITIALIZING</span>
+      </div>
+      <button class="lcars-btn-small" id="connectBtn">CONNECT</button>
+    </div>
+
+    <!-- Tab Navigation -->
+    <nav class="lcars-tabs">
+      <button class="tab-btn active" data-tab="bookmarks">BOOKMARKS</button>
+      <button class="tab-btn" data-tab="tabs">TABS</button>
+      <button class="tab-btn" data-tab="tools">TOOLS</button>
+    </nav>
+
+    <!-- Content Panels -->
+    <main class="content-area">
+      <!-- Bookmarks Panel -->
+      <section id="bookmarks-panel" class="panel active">
+        <div class="panel-header">
+          <span class="panel-title">BOOKMARK DATABASE</span>
+          <button class="lcars-btn-small" id="refreshBookmarks">↻</button>
+        </div>
+        <div class="search-bar">
+          <input type="text" id="bookmarkSearch" placeholder="Search bookmarks...">
+        </div>
+        <div class="list-container" id="bookmarkList">
+          <div class="loading">Loading...</div>
+        </div>
+        <div class="stats-bar">
+          <span id="bookmarkCount">0 bookmarks</span>
+        </div>
+      </section>
+
+      <!-- Tabs Panel -->
+      <section id="tabs-panel" class="panel">
+        <div class="panel-header">
+          <span class="panel-title">ACTIVE TABS</span>
+          <button class="lcars-btn-small" id="refreshTabs">↻</button>
+        </div>
+        <div class="list-container" id="tabList">
+          <div class="loading">Loading...</div>
+        </div>
+        <div class="stats-bar">
+          <span id="tabCount">0 tabs</span>
+        </div>
+      </section>
+
+      <!-- Tools Panel -->
+      <section id="tools-panel" class="panel">
+        <div class="panel-header">
+          <span class="panel-title">UTILITIES</span>
+        </div>
+        <div class="tools-grid">
+          <button class="tool-btn" id="findDuplicates">
+            <span class="tool-icon">⚡</span>
+            <span class="tool-label">Find Duplicates</span>
+          </button>
+          <button class="tool-btn" id="groupTabs">
+            <span class="tool-icon">◫</span>
+            <span class="tool-label">Group by Domain</span>
+          </button>
+          <button class="tool-btn" id="exportBookmarks">
+            <span class="tool-icon">↓</span>
+            <span class="tool-label">Export Data</span>
+          </button>
+        </div>
+        <div class="results-area" id="toolResults">
+          <div class="placeholder">Select a tool to run</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="lcars-footer">
+      <div class="footer-bar"></div>
+      <span class="version">v1.0.0</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
