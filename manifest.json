@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Skynet Browser Manager",
-  "version": "1.0.0",
-  "description": "Remote browser management for Skynet - bookmarks, tabs, and more",
+  "version": "1.0.1",
+  "description": "Remote browser management for Skynet (custom build for 10.10.10.123) - bookmarks, tabs, and more",
   "permissions": [
     "bookmarks",
     "tabs",
@@ -10,8 +10,8 @@
     "activeTab"
   ],
   "host_permissions": [
-    "ws://localhost:18789/*",
-    "wss://localhost:18789/*"
+    "ws://10.10.10.123:18789/*",
+    "wss://10.10.10.123:18789/*"
   ],
   "background": {
     "service_worker": "background.js",

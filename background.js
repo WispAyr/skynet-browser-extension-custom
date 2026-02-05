@@ -1,7 +1,7 @@
 // Skynet Browser Manager - Background Service Worker
 // WebSocket connection to Clawdbot gateway + command handling
 
-const GATEWAY_URL = 'ws://localhost:18789/extension';
+const GATEWAY_URL = 'ws://10.10.10.123:18789/extension';
 const RECONNECT_DELAY = 5000;
 const HEARTBEAT_INTERVAL = 30000;
 
