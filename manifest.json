@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Skynet Browser Manager - Enhanced",
-  "version": "2.0.0",
-  "description": "Enhanced remote browser management for Skynet - auto-bookmarking, shared tabs, remote debugging",
+  "version": "2.1.0",
+  "description": "Enhanced remote browser management for Skynet - auto-bookmarking, shared tabs, remote debugging, auto-updates",
   "permissions": [
     "bookmarks",
     "tabs",
@@ -12,7 +12,8 @@
     "scripting",
     "webNavigation",
     "sessions",
-    "history"
+    "history",
+    "notifications"
   ],
   "host_permissions": [
     "ws://10.10.10.123:18789/*",

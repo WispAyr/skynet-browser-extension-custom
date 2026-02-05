@@ -10,6 +10,8 @@ class SkynetPopup {
       sharedTabs: 0,
       debugSessions: 0
     };
+    this.updateInfo = null;
+    this.updateSettings = null;
     
     this.init();
   }
@@ -101,6 +103,48 @@ class SkynetPopup {
         this.executeDebugCommand();
       }
     });
+    
+    // Update system event listeners
+    document.getElementById('checkUpdatesBtn').addEventListener('click', () => {
+      this.checkForUpdates();
+    });
+    
+    document.getElementById('updateSettingsBtn').addEventListener('click', () => {
+      this.toggleUpdateSettings();
+    });
+    
+    document.getElementById('downloadUpdateBtn').addEventListener('click', () => {
+      this.downloadUpdate();
+    });
+    
+    document.getElementById('viewReleaseNotesBtn').addEventListener('click', () => {
+      this.showReleaseNotes();
+    });
+    
+    document.getElementById('installUpdateBtn').addEventListener('click', () => {
+      this.showInstallInstructions();
+    });
+    
+    document.getElementById('downloadLinkBtn').addEventListener('click', () => {
+      this.downloadUpdateFile();
+    });
+    
+    document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+      this.saveUpdateSettings();
+    });
+    
+    document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
+      this.hideUpdateSettings();
+    });
+    
+    // Modal event listeners
+    document.getElementById('closeInstructionsModal').addEventListener('click', () => {
+      document.getElementById('installInstructionsModal').style.display = 'none';
+    });
+    
+    document.getElementById('closeReleaseNotesModal').addEventListener('click', () => {
+      document.getElementById('releaseNotesModal').style.display = 'none';
+    });
   }
   
   setupTabNavigation() {
@@ -137,6 +181,9 @@ class SkynetPopup {
         break;
       case 'debug':
         await this.loadDebugSessions();
+        break;
+      case 'updates':
+        await this.loadUpdateInfo();
         break;
     }
   }
@@ -529,6 +576,34 @@ class SkynetPopup {
           this.addToDebugConsole(`[${message.sessionId.slice(0, 8)}] ${message.message}`, 'info');
         }
         break;
+        
+      case 'update.available':
+        this.updateInfo = message.updateInfo;
+        this.showUpdateAvailable(message.updateInfo);
+        this.showUpdateBadge();
+        if (this.currentTab === 'updates') {
+          this.loadUpdateInfo();
+        }
+        break;
+        
+      case 'update.ready':
+        this.updateInfo = message.updateInfo;
+        this.showUpdateReady(message.updateInfo);
+        if (this.currentTab === 'updates') {
+          this.loadUpdateInfo();
+        }
+        break;
+        
+      case 'update.status':
+        if (this.currentTab === 'updates') {
+          this.showUpdateStatus(message.message, message.statusType);
+        }
+        break;
+        
+      case 'update.install.instructions':
+        this.updateInfo = message.updateInfo;
+        this.showInstallInstructions();
+        break;
     }
   }
   
@@ -687,6 +762,307 @@ class SkynetPopup {
   async exportData() {
     this.showNotification('Exporting data...');
     // Implementation for data export
+  }
+  
+  // ============================================
+  // Auto-Update System
+  // ============================================
+  
+  async loadUpdateInfo() {
+    try {
+      // Load current update settings
+      const settingsResult = await this.sendToBackground({
+        action: 'update.settings.get'
+      });
+      
+      if (settingsResult.success) {
+        this.updateSettings = settingsResult.data;
+        this.populateUpdateSettings();
+      }
+      
+      // Load update history
+      const historyResult = await this.sendToBackground({
+        action: 'update.history'
+      });
+      
+      if (historyResult.success) {
+        this.renderUpdateHistory(historyResult.data);
+      }
+      
+      // Update status display
+      this.updateUpdateStatus();
+      
+    } catch (err) {
+      console.error('Failed to load update info:', err);
+    }
+  }
+  
+  async checkForUpdates() {
+    try {
+      this.showUpdateStatus('Checking for updates...', 'checking');
+      
+      const result = await this.sendToBackground({
+        action: 'update.check'
+      });
+      
+      if (result.success && result.data) {
+        // Update available
+        this.updateInfo = result.data;
+        this.showUpdateAvailable(result.data);
+        this.showUpdateBadge();
+      } else {
+        // Up to date
+        this.showUpdateStatus('Extension is up to date!', 'up-to-date');
+        this.hideUpdateBadge();
+      }
+      
+    } catch (err) {
+      console.error('Update check failed:', err);
+      this.showUpdateStatus(`Update check failed: ${err.message}`, 'error');
+    }
+  }
+  
+  async downloadUpdate() {
+    if (!this.updateInfo) {
+      this.showError('No update information available');
+      return;
+    }
+    
+    try {
+      this.showUpdateProgress('Downloading update...', 0);
+      
+      const result = await this.sendToBackground({
+        action: 'update.download'
+      });
+      
+      if (result.success) {
+        this.showUpdateProgress('Download complete!', 100);
+        setTimeout(() => {
+          this.showUpdateReady(this.updateInfo);
+        }, 1000);
+      }
+      
+    } catch (err) {
+      console.error('Download failed:', err);
+      this.showError(`Download failed: ${err.message}`);
+    }
+  }
+  
+  async downloadUpdateFile() {
+    try {
+      const result = await this.sendToBackground({
+        action: 'update.download.link'
+      });
+      
+      if (result.success) {
+        // Create download link
+        const link = document.createElement('a');
+        link.href = result.data.url;
+        link.download = result.data.filename;
+        link.click();
+        
+        this.showNotification(`Downloading ${result.data.filename}...`);
+      }
+      
+    } catch (err) {
+      console.error('Download link generation failed:', err);
+      this.showError(`Failed to generate download: ${err.message}`);
+    }
+  }
+  
+  showInstallInstructions() {
+    document.getElementById('installInstructionsModal').style.display = 'flex';
+  }
+  
+  showReleaseNotes() {
+    if (!this.updateInfo) return;
+    
+    const modal = document.getElementById('releaseNotesModal');
+    const content = document.getElementById('releaseNotesContent');
+    
+    // Convert markdown-like release notes to HTML
+    const formattedNotes = this.formatReleaseNotes(this.updateInfo.releaseNotes);
+    content.innerHTML = formattedNotes;
+    
+    modal.style.display = 'flex';
+  }
+  
+  formatReleaseNotes(notes) {
+    if (!notes) return 'No release notes available.';
+    
+    return notes
+      .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+      .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+      .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`(.*?)`/g, '<code>$1</code>')
+      .replace(/^\- (.*$)/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+      .replace(/\n/g, '<br>');
+  }
+  
+  toggleUpdateSettings() {
+    const panel = document.getElementById('updateSettingsPanel');
+    const isVisible = panel.style.display !== 'none';
+    
+    if (isVisible) {
+      panel.style.display = 'none';
+    } else {
+      panel.style.display = 'block';
+      this.loadUpdateSettings();
+    }
+  }
+  
+  hideUpdateSettings() {
+    document.getElementById('updateSettingsPanel').style.display = 'none';
+  }
+  
+  async loadUpdateSettings() {
+    if (!this.updateSettings) {
+      try {
+        const result = await this.sendToBackground({
+          action: 'update.settings.get'
+        });
+        
+        if (result.success) {
+          this.updateSettings = result.data;
+        }
+      } catch (err) {
+        console.error('Failed to load update settings:', err);
+        return;
+      }
+    }
+    
+    this.populateUpdateSettings();
+  }
+  
+  populateUpdateSettings() {
+    if (!this.updateSettings) return;
+    
+    document.getElementById('autoCheckUpdates').checked = this.updateSettings.autoCheck;
+    document.getElementById('autoDownloadUpdates').checked = this.updateSettings.autoDownload;
+    document.getElementById('notifyUpdates').checked = this.updateSettings.notifyUpdates;
+    document.getElementById('backupBeforeUpdate').checked = this.updateSettings.backupBeforeUpdate;
+    document.getElementById('updateInterval').value = this.updateSettings.checkInterval;
+  }
+  
+  async saveUpdateSettings() {
+    try {
+      const newSettings = {
+        autoCheck: document.getElementById('autoCheckUpdates').checked,
+        autoDownload: document.getElementById('autoDownloadUpdates').checked,
+        notifyUpdates: document.getElementById('notifyUpdates').checked,
+        backupBeforeUpdate: document.getElementById('backupBeforeUpdate').checked,
+        checkInterval: parseInt(document.getElementById('updateInterval').value)
+      };
+      
+      const result = await this.sendToBackground({
+        action: 'update.settings.update',
+        settings: newSettings
+      });
+      
+      if (result.success) {
+        this.updateSettings = { ...this.updateSettings, ...newSettings };
+        this.showNotification('Update settings saved!');
+        this.hideUpdateSettings();
+      }
+      
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+      this.showError(`Failed to save settings: ${err.message}`);
+    }
+  }
+  
+  renderUpdateHistory(history) {
+    const container = document.getElementById('updateHistoryList');
+    
+    if (!history || history.length === 0) {
+      container.innerHTML = '<div class="empty-state">No update history</div>';
+      return;
+    }
+    
+    container.innerHTML = history.map(update => `
+      <div class="update-history-item">
+        <div>
+          <div class="update-history-version">v${update.version}</div>
+          <div class="update-history-date">${new Date(update.date).toLocaleString()}</div>
+        </div>
+        <div class="update-history-status ${update.status}">
+          ${update.status.replace('_', ' ').toUpperCase()}
+        </div>
+      </div>
+    `).join('');
+  }
+  
+  showUpdateStatus(message, type) {
+    const icon = document.getElementById('updateStatusIcon');
+    const title = document.getElementById('updateStatusTitle');
+    const subtitle = document.getElementById('updateStatusSubtitle');
+    
+    const icons = {
+      'up-to-date': '✅',
+      'checking': '🔍',
+      'error': '❌'
+    };
+    
+    icon.textContent = icons[type] || '🔄';
+    title.textContent = message;
+    subtitle.textContent = `Version ${chrome.runtime.getManifest().version} • Last checked: ${new Date().toLocaleTimeString()}`;
+    
+    // Hide other update cards
+    document.getElementById('updateAvailableCard').style.display = 'none';
+    document.getElementById('updateReadyCard').style.display = 'none';
+  }
+  
+  showUpdateAvailable(updateInfo) {
+    const card = document.getElementById('updateAvailableCard');
+    const title = document.getElementById('updateAvailableTitle');
+    const subtitle = document.getElementById('updateAvailableSubtitle');
+    
+    title.textContent = `Update Available: v${updateInfo.version}`;
+    subtitle.textContent = `${updateInfo.releaseTitle} • ${updateInfo.size}`;
+    
+    card.style.display = 'block';
+    
+    // Hide other cards
+    document.getElementById('updateReadyCard').style.display = 'none';
+  }
+  
+  showUpdateReady(updateInfo) {
+    const card = document.getElementById('updateReadyCard');
+    const subtitle = document.getElementById('updateReadySubtitle');
+    
+    subtitle.textContent = `Version ${updateInfo.version} is ready to install`;
+    
+    card.style.display = 'block';
+    
+    // Hide other cards
+    document.getElementById('updateAvailableCard').style.display = 'none';
+    document.getElementById('updateProgress').style.display = 'none';
+  }
+  
+  showUpdateProgress(message, percent) {
+    const progress = document.getElementById('updateProgress');
+    const fill = document.getElementById('updateProgressFill');
+    const text = document.getElementById('updateProgressText');
+    
+    progress.style.display = 'block';
+    fill.style.width = percent + '%';
+    text.textContent = message;
+  }
+  
+  showUpdateBadge() {
+    document.getElementById('updateBadge').style.display = 'inline-flex';
+  }
+  
+  hideUpdateBadge() {
+    document.getElementById('updateBadge').style.display = 'none';
+  }
+  
+  updateUpdateStatus() {
+    // This will be called periodically or on tab focus
+    this.showUpdateStatus('Ready to check for updates', 'up-to-date');
   }
 }
 

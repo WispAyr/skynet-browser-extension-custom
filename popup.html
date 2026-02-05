@@ -22,6 +22,10 @@
       <button class="nav-tab" data-tab="tabs">Tabs</button>
       <button class="nav-tab" data-tab="collaboration">Collaborate</button>
       <button class="nav-tab" data-tab="debug">Debug</button>
+      <button class="nav-tab" data-tab="updates" id="updatesTab">
+        <span>Updates</span>
+        <span class="update-badge" id="updateBadge" style="display: none;">!</span>
+      </button>
     </div>
 
     <!-- Dashboard Tab -->
@@ -161,6 +165,194 @@
         
         <div id="debugSessionsList" class="sessions-list">
           <div class="empty-state">No active debug sessions</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Updates Tab -->
+    <div class="tab-content" id="updates">
+      <div class="section">
+        <h3>🚀 Auto-Update System</h3>
+        
+        <!-- Update Status -->
+        <div class="update-status-card" id="updateStatusCard">
+          <div class="update-status-header">
+            <div class="update-status-icon" id="updateStatusIcon">✅</div>
+            <div class="update-status-text">
+              <div class="update-status-title" id="updateStatusTitle">Up to Date</div>
+              <div class="update-status-subtitle" id="updateStatusSubtitle">Version 2.0.0 • Last checked: Never</div>
+            </div>
+          </div>
+          <div class="update-actions">
+            <button class="action-btn" id="checkUpdatesBtn">
+              <span class="btn-icon">🔍</span>
+              Check Now
+            </button>
+            <button class="action-btn" id="updateSettingsBtn" style="margin-left: 8px;">
+              <span class="btn-icon">⚙️</span>
+              Settings
+            </button>
+          </div>
+        </div>
+        
+        <!-- Update Available (hidden by default) -->
+        <div class="update-available-card" id="updateAvailableCard" style="display: none;">
+          <div class="update-available-header">
+            <div class="update-available-icon">🎉</div>
+            <div class="update-available-text">
+              <div class="update-available-title" id="updateAvailableTitle">Update Available!</div>
+              <div class="update-available-subtitle" id="updateAvailableSubtitle">Version 2.0.1 is ready to download</div>
+            </div>
+          </div>
+          <div class="update-available-actions">
+            <button class="action-btn primary" id="downloadUpdateBtn">
+              <span class="btn-icon">⬇️</span>
+              Download Update
+            </button>
+            <button class="action-btn" id="viewReleaseNotesBtn">
+              <span class="btn-icon">📝</span>
+              Release Notes
+            </button>
+          </div>
+          <div class="update-progress" id="updateProgress" style="display: none;">
+            <div class="progress-bar">
+              <div class="progress-fill" id="updateProgressFill"></div>
+            </div>
+            <div class="progress-text" id="updateProgressText">Downloading...</div>
+          </div>
+        </div>
+        
+        <!-- Update Ready to Install -->
+        <div class="update-ready-card" id="updateReadyCard" style="display: none;">
+          <div class="update-ready-header">
+            <div class="update-ready-icon">📦</div>
+            <div class="update-ready-text">
+              <div class="update-ready-title">Update Downloaded!</div>
+              <div class="update-ready-subtitle" id="updateReadySubtitle">Version 2.0.1 is ready to install</div>
+            </div>
+          </div>
+          <div class="update-ready-actions">
+            <button class="action-btn primary" id="installUpdateBtn">
+              <span class="btn-icon">🚀</span>
+              Install Now
+            </button>
+            <button class="action-btn" id="downloadLinkBtn">
+              <span class="btn-icon">💾</span>
+              Download File
+            </button>
+          </div>
+        </div>
+        
+        <!-- Update Settings Panel -->
+        <div class="update-settings-panel" id="updateSettingsPanel" style="display: none;">
+          <h4>⚙️ Auto-Update Settings</h4>
+          <div class="settings-group">
+            <label class="setting-item">
+              <input type="checkbox" id="autoCheckUpdates">
+              <span>Automatically check for updates</span>
+            </label>
+            <label class="setting-item">
+              <input type="checkbox" id="autoDownloadUpdates">
+              <span>Auto-download updates when available</span>
+            </label>
+            <label class="setting-item">
+              <input type="checkbox" id="notifyUpdates">
+              <span>Show update notifications</span>
+            </label>
+            <label class="setting-item">
+              <input type="checkbox" id="backupBeforeUpdate">
+              <span>Create backup before updating</span>
+            </label>
+          </div>
+          
+          <div class="setting-item">
+            <label>Check interval (minutes):</label>
+            <select id="updateInterval">
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="180">3 hours</option>
+              <option value="360">6 hours</option>
+              <option value="720">12 hours</option>
+              <option value="1440">Daily</option>
+            </select>
+          </div>
+          
+          <div class="settings-actions">
+            <button class="action-btn" id="saveSettingsBtn">
+              <span class="btn-icon">💾</span>
+              Save Settings
+            </button>
+            <button class="action-btn" id="cancelSettingsBtn">
+              <span class="btn-icon">✖️</span>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Update History -->
+      <div class="section">
+        <h3>📋 Update History</h3>
+        <div id="updateHistoryList" class="update-history">
+          <div class="loading">Loading update history...</div>
+        </div>
+      </div>
+      
+      <!-- Install Instructions Modal (hidden) -->
+      <div class="update-modal" id="installInstructionsModal" style="display: none;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>🚀 Installation Instructions</h3>
+            <button class="modal-close" id="closeInstructionsModal">✖</button>
+          </div>
+          <div class="modal-body">
+            <div class="install-steps">
+              <div class="install-step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                  <div class="step-title">Download the Update</div>
+                  <div class="step-description">Click "Download File" above to save the update zip</div>
+                </div>
+              </div>
+              <div class="install-step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                  <div class="step-title">Extract the Files</div>
+                  <div class="step-description">Unzip the downloaded file to a new folder</div>
+                </div>
+              </div>
+              <div class="install-step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                  <div class="step-title">Update Extension</div>
+                  <div class="step-description">Go to chrome://extensions/, remove old extension, load the new folder</div>
+                </div>
+              </div>
+              <div class="install-step">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                  <div class="step-title">Verify Installation</div>
+                  <div class="step-description">Check that the new version number appears in the footer</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Release Notes Modal (hidden) -->
+      <div class="update-modal" id="releaseNotesModal" style="display: none;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>📝 Release Notes</h3>
+            <button class="modal-close" id="closeReleaseNotesModal">✖</button>
+          </div>
+          <div class="modal-body">
+            <div id="releaseNotesContent" class="release-notes">
+              Loading release notes...
+            </div>
+          </div>
         </div>
       </div>
     </div>

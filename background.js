@@ -13,6 +13,23 @@ let connectionState = 'disconnected';
 let autoBookmarkTimer = null;
 let sharedTabs = new Map(); // tabId -> shared session data
 let debugSessions = new Map(); // tabId -> debug session data
+let autoUpdater = null; // Auto-updater instance
+
+// ============================================
+// Auto-Updater Integration
+// ============================================
+
+// Import and initialize auto-updater
+importScripts('auto-updater.js');
+
+async function initializeAutoUpdater() {
+  try {
+    autoUpdater = new SkynetAutoUpdater();
+    console.log('[Skynet] Auto-updater initialized');
+  } catch (err) {
+    console.error('[Skynet] Auto-updater initialization failed:', err);
+  }
+}
 
 // ============================================
 // Auto-Bookmarking System
@@ -497,6 +514,38 @@ async function handleMessage(msg) {
         response.data = await injectDebugScript(msg.tabId, msg.script);
         break;
         
+      // Auto-updater commands
+      case 'update.check':
+        response.data = await autoUpdater?.manualUpdateCheck();
+        break;
+        
+      case 'update.download':
+        await autoUpdater?.downloadAvailableUpdate();
+        response.data = { status: 'download_started' };
+        break;
+        
+      case 'update.settings.get':
+        response.data = await autoUpdater?.getUpdateSettings();
+        break;
+        
+      case 'update.settings.update':
+        await autoUpdater?.updateSettings(msg.settings);
+        response.data = { status: 'settings_updated' };
+        break;
+        
+      case 'update.history':
+        response.data = await autoUpdater?.getUpdateHistory();
+        break;
+        
+      case 'update.rollback':
+        await autoUpdater?.rollbackUpdate(msg.version);
+        response.data = { status: 'rollback_initiated' };
+        break;
+        
+      case 'update.download.link':
+        response.data = await autoUpdater?.generateUpdateDownloadLink();
+        break;
+        
       default:
         response.success = false;
         response.error = `Unknown action: ${msg.action}`;
@@ -642,7 +691,10 @@ function stopHeartbeat() {
 // Initialization
 // ============================================
 
+// Initialize auto-updater
+initializeAutoUpdater();
+
 // Start connection when extension loads
 connect();
 
-console.log('[Skynet] Enhanced Browser Manager initialized');
+console.log('[Skynet] Enhanced Browser Manager with Auto-Updater initialized');
