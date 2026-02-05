@@ -1,14 +1,386 @@
-// Skynet Browser Manager - Background Service Worker
-// WebSocket connection to Clawdbot gateway + command handling
+// Skynet Browser Manager - Enhanced Background Service Worker
+// WebSocket connection to Clawdbot gateway + advanced features
 
 const GATEWAY_URL = 'ws://10.10.10.123:18789/extension';
 const RECONNECT_DELAY = 5000;
 const HEARTBEAT_INTERVAL = 30000;
+const AUTO_BOOKMARK_DELAY = 3000; // Wait 3 seconds before auto-bookmarking
 
 let ws = null;
 let reconnectTimer = null;
 let heartbeatTimer = null;
 let connectionState = 'disconnected';
+let autoBookmarkTimer = null;
+let sharedTabs = new Map(); // tabId -> shared session data
+let debugSessions = new Map(); // tabId -> debug session data
+
+// ============================================
+// Auto-Bookmarking System
+// ============================================
+
+// Keywords that indicate "work" content
+const WORK_KEYWORDS = [
+  'github', 'gitlab', 'bitbucket', 'stackoverflow', 'docs', 'documentation',
+  'api', 'tutorial', 'guide', 'reference', 'manual', 'wiki', 'confluence',
+  'jira', 'trello', 'notion', 'figma', 'miro', 'slack', 'discord',
+  'aws', 'azure', 'gcp', 'kubernetes', 'docker', 'terraform',
+  'react', 'vue', 'angular', 'nodejs', 'python', 'javascript',
+  'development', 'programming', 'coding', 'software', 'engineering'
+];
+
+// Domains that are typically work-related
+const WORK_DOMAINS = [
+  'github.com', 'gitlab.com', 'stackoverflow.com', 'docs.google.com',
+  'confluence.atlassian.com', 'jira.atlassian.com', 'figma.com',
+  'notion.so', 'miro.com', 'slack.com', 'discord.com',
+  'aws.amazon.com', 'console.aws.amazon.com', 'azure.microsoft.com',
+  'console.cloud.google.com', 'kubernetes.io', 'docker.com'
+];
+
+// Auto-bookmark intelligent detection
+async function analyzeAndBookmarkTab(tabId, tab) {
+  if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    return;
+  }
+
+  try {
+    const url = new URL(tab.url);
+    const domain = url.hostname.toLowerCase();
+    const path = url.pathname.toLowerCase();
+    const title = tab.title?.toLowerCase() || '';
+    
+    // Check if this looks like work content
+    const isWorkDomain = WORK_DOMAINS.some(workDomain => domain.includes(workDomain));
+    const hasWorkKeywords = WORK_KEYWORDS.some(keyword => 
+      title.includes(keyword) || path.includes(keyword) || domain.includes(keyword)
+    );
+    
+    // Additional heuristics
+    const hasLongSession = await checkSessionDuration(tabId) > 60000; // 1+ minutes
+    const hasInteraction = await checkTabInteraction(tabId);
+    
+    if (isWorkDomain || hasWorkKeywords || (hasLongSession && hasInteraction)) {
+      await autoBookmarkTab(tab);
+    }
+  } catch (err) {
+    console.error('[Skynet] Auto-bookmark analysis failed:', err);
+  }
+}
+
+async function autoBookmarkTab(tab) {
+  try {
+    // Check if already bookmarked
+    const existingBookmarks = await chrome.bookmarks.search({ url: tab.url });
+    if (existingBookmarks.length > 0) {
+      return; // Already bookmarked
+    }
+    
+    // Create auto-bookmark folder if it doesn't exist
+    let autoFolder = await findOrCreateFolder('🤖 Auto-Bookmarked');
+    
+    // Create date-based subfolder
+    const today = new Date().toISOString().split('T')[0];
+    const dateFolder = await findOrCreateFolder(today, autoFolder.id);
+    
+    // Create bookmark with enriched title
+    const enrichedTitle = `${tab.title} [Auto-${new Date().toLocaleTimeString()}]`;
+    
+    const bookmark = await chrome.bookmarks.create({
+      parentId: dateFolder.id,
+      title: enrichedTitle,
+      url: tab.url
+    });
+    
+    // Notify gateway about auto-bookmark
+    send({
+      type: 'auto.bookmark.created',
+      bookmark: bookmark,
+      tab: { id: tab.id, title: tab.title, url: tab.url },
+      reason: 'auto-detection',
+      timestamp: Date.now()
+    });
+    
+    console.log('[Skynet] Auto-bookmarked:', tab.title);
+  } catch (err) {
+    console.error('[Skynet] Auto-bookmark failed:', err);
+  }
+}
+
+async function findOrCreateFolder(name, parentId = null) {
+  const searchResults = await chrome.bookmarks.search({ title: name });
+  for (let result of searchResults) {
+    if (result.url === undefined) { // It's a folder
+      if (!parentId || result.parentId === parentId) {
+        return result;
+      }
+    }
+  }
+  
+  // Create new folder
+  return await chrome.bookmarks.create({
+    parentId: parentId || '1', // Bookmarks bar
+    title: name
+  });
+}
+
+// ============================================
+// Shared Tabs & Collaboration
+// ============================================
+
+async function createSharedTab(url, sessionName = null) {
+  try {
+    const tab = await chrome.tabs.create({ url: url, active: true });
+    
+    const sharedSession = {
+      sessionId: generateSessionId(),
+      sessionName: sessionName || `Shared-${Date.now()}`,
+      tabId: tab.id,
+      url: url,
+      participants: ['user', 'skynet'],
+      created: Date.now(),
+      lastActivity: Date.now(),
+      actions: []
+    };
+    
+    sharedTabs.set(tab.id, sharedSession);
+    
+    // Inject collaboration script
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: initCollaborationMode,
+      args: [sharedSession.sessionId]
+    });
+    
+    // Notify gateway
+    send({
+      type: 'shared.tab.created',
+      session: sharedSession
+    });
+    
+    return sharedSession;
+  } catch (err) {
+    console.error('[Skynet] Shared tab creation failed:', err);
+    throw err;
+  }
+}
+
+function initCollaborationMode(sessionId) {
+  // This runs in the page context
+  window.skynetSessionId = sessionId;
+  
+  // Add visual indicator
+  const indicator = document.createElement('div');
+  indicator.id = 'skynet-collaboration-indicator';
+  indicator.style.cssText = `
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: linear-gradient(45deg, #00d4ff, #ff9500);
+    color: black;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-family: monospace;
+    font-weight: bold;
+    z-index: 999999;
+    font-size: 12px;
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3);
+  `;
+  indicator.textContent = `🤖 SKYNET SHARED SESSION: ${sessionId.slice(0, 8)}`;
+  document.body.appendChild(indicator);
+  
+  // Track user interactions
+  ['click', 'scroll', 'keypress'].forEach(eventType => {
+    document.addEventListener(eventType, (e) => {
+      chrome.runtime.sendMessage({
+        type: 'shared.interaction',
+        sessionId: sessionId,
+        event: eventType,
+        target: e.target.tagName,
+        timestamp: Date.now()
+      });
+    });
+  });
+}
+
+async function syncSharedTabAction(tabId, action) {
+  const session = sharedTabs.get(tabId);
+  if (!session) return;
+  
+  session.actions.push({
+    type: action.type,
+    data: action.data,
+    timestamp: Date.now(),
+    participant: action.participant || 'skynet'
+  });
+  
+  session.lastActivity = Date.now();
+  
+  // Broadcast to all participants
+  send({
+    type: 'shared.tab.action',
+    sessionId: session.sessionId,
+    action: action
+  });
+}
+
+// ============================================
+// Remote Debugging System
+// ============================================
+
+async function enableRemoteDebugging(tabId, options = {}) {
+  try {
+    // Attach Chrome DevTools debugger
+    await chrome.debugger.attach({ tabId: tabId }, '1.3');
+    
+    const debugSession = {
+      tabId: tabId,
+      sessionId: generateSessionId(),
+      enabled: true,
+      created: Date.now(),
+      features: {
+        console: options.console !== false,
+        network: options.network !== false,
+        runtime: options.runtime !== false,
+        dom: options.dom !== false,
+        performance: options.performance !== false
+      },
+      logs: []
+    };
+    
+    debugSessions.set(tabId, debugSession);
+    
+    // Enable debugging domains
+    if (debugSession.features.console) {
+      await chrome.debugger.sendCommand({ tabId }, 'Console.enable');
+      await chrome.debugger.sendCommand({ tabId }, 'Runtime.enable');
+    }
+    
+    if (debugSession.features.network) {
+      await chrome.debugger.sendCommand({ tabId }, 'Network.enable');
+    }
+    
+    if (debugSession.features.dom) {
+      await chrome.debugger.sendCommand({ tabId }, 'DOM.enable');
+    }
+    
+    // Inject debug console overlay
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: createDebugOverlay,
+      args: [debugSession.sessionId]
+    });
+    
+    // Notify gateway
+    send({
+      type: 'debug.session.created',
+      session: debugSession
+    });
+    
+    console.log('[Skynet] Remote debugging enabled for tab:', tabId);
+    return debugSession;
+  } catch (err) {
+    console.error('[Skynet] Remote debugging setup failed:', err);
+    throw err;
+  }
+}
+
+function createDebugOverlay(sessionId) {
+  // Create floating debug console
+  const overlay = document.createElement('div');
+  overlay.id = 'skynet-debug-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 400px;
+    height: 300px;
+    background: rgba(0, 0, 0, 0.9);
+    border: 2px solid #00d4ff;
+    border-radius: 10px;
+    color: #00d4ff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    z-index: 999999;
+    display: none;
+    overflow: hidden;
+  `;
+  
+  const header = document.createElement('div');
+  header.style.cssText = `
+    background: #00d4ff;
+    color: black;
+    padding: 5px 10px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  `;
+  header.innerHTML = `
+    <span>🤖 SKYNET DEBUG: ${sessionId.slice(0, 8)}</span>
+    <span style="cursor: pointer;" onclick="this.parentElement.parentElement.style.display='none'">✖</span>
+  `;
+  
+  const content = document.createElement('div');
+  content.style.cssText = `
+    padding: 10px;
+    height: 250px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  `;
+  content.id = 'skynet-debug-content';
+  
+  overlay.appendChild(header);
+  overlay.appendChild(content);
+  document.body.appendChild(overlay);
+  
+  // Toggle debug overlay with Ctrl+Shift+D
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+      overlay.style.display = overlay.style.display === 'none' ? 'block' : 'none';
+    }
+  });
+  
+  // Expose debugging functions globally
+  window.skynetDebug = {
+    sessionId: sessionId,
+    log: (message) => {
+      content.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
+      content.scrollTop = content.scrollHeight;
+      
+      chrome.runtime.sendMessage({
+        type: 'debug.log',
+        sessionId: sessionId,
+        message: message,
+        timestamp: Date.now()
+      });
+    },
+    eval: (code) => {
+      try {
+        const result = eval(code);
+        window.skynetDebug.log(`> ${code}`);
+        window.skynetDebug.log(`< ${JSON.stringify(result, null, 2)}`);
+        return result;
+      } catch (err) {
+        window.skynetDebug.log(`> ${code}`);
+        window.skynetDebug.log(`! ${err.message}`);
+        throw err;
+      }
+    },
+    inspect: (selector) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        window.skynetDebug.log(`Element: ${selector}`);
+        window.skynetDebug.log(`Tag: ${element.tagName}`);
+        window.skynetDebug.log(`Classes: ${element.className}`);
+        window.skynetDebug.log(`Text: ${element.textContent?.slice(0, 100)}...`);
+        return element;
+      } else {
+        window.skynetDebug.log(`Element not found: ${selector}`);
+        return null;
+      }
+    }
+  };
+}
 
 // ============================================
 // WebSocket Connection Management
@@ -29,11 +401,14 @@ function connect() {
       clearReconnectTimer();
       startHeartbeat();
       
-      // Announce ourselves
+      // Announce ourselves with enhanced capabilities
       send({
         type: 'extension.hello',
-        capabilities: ['bookmarks', 'tabs'],
-        version: '1.0.0'
+        capabilities: [
+          'bookmarks', 'tabs', 'auto-bookmarking', 
+          'shared-tabs', 'remote-debugging', 'collaboration'
+        ],
+        version: '2.0.0'
       });
     };
     
@@ -65,6 +440,162 @@ function connect() {
   }
 }
 
+// ============================================
+// Enhanced Message Handling
+// ============================================
+
+async function handleMessage(msg) {
+  try {
+    let response = { 
+      success: true, 
+      action: msg.action,
+      requestId: msg.requestId 
+    };
+    
+    switch (msg.action) {
+      // Original bookmark/tab commands...
+      case 'bookmarks.list':
+        response.data = await chrome.bookmarks.getTree();
+        break;
+      
+      case 'bookmarks.search':
+        response.data = await chrome.bookmarks.search(msg.query || '');
+        break;
+        
+      case 'tabs.list':
+        response.data = await chrome.tabs.query({});
+        break;
+        
+      // New enhanced features
+      case 'auto-bookmark.enable':
+        await enableAutoBookmarking(msg.options || {});
+        response.data = { enabled: true };
+        break;
+        
+      case 'auto-bookmark.disable':
+        await disableAutoBookmarking();
+        response.data = { enabled: false };
+        break;
+        
+      case 'shared.tab.create':
+        response.data = await createSharedTab(msg.url, msg.sessionName);
+        break;
+        
+      case 'shared.tab.join':
+        response.data = await joinSharedTab(msg.sessionId);
+        break;
+        
+      case 'debug.enable':
+        response.data = await enableRemoteDebugging(msg.tabId, msg.options);
+        break;
+        
+      case 'debug.execute':
+        response.data = await executeDebugCommand(msg.tabId, msg.command);
+        break;
+        
+      case 'debug.inject':
+        response.data = await injectDebugScript(msg.tabId, msg.script);
+        break;
+        
+      default:
+        response.success = false;
+        response.error = `Unknown action: ${msg.action}`;
+    }
+    
+    send(response);
+  } catch (err) {
+    console.error('[Skynet] Command failed:', err);
+    send({
+      success: false,
+      action: msg.action,
+      requestId: msg.requestId,
+      error: err.message
+    });
+  }
+}
+
+// ============================================
+// Event Listeners & Auto-Detection
+// ============================================
+
+// Tab update listener for auto-bookmarking
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url) {
+    // Delayed analysis to let page load fully
+    setTimeout(() => {
+      analyzeAndBookmarkTab(tabId, tab);
+    }, AUTO_BOOKMARK_DELAY);
+  }
+});
+
+// Track session duration
+const tabSessions = new Map();
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  tabSessions.set(tabId, Date.now());
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  tabSessions.delete(tabId);
+  sharedTabs.delete(tabId);
+  debugSessions.delete(tabId);
+});
+
+// Debugger event handling
+chrome.debugger.onEvent.addListener((source, method, params) => {
+  const session = debugSessions.get(source.tabId);
+  if (!session) return;
+  
+  // Forward relevant debugging events to gateway
+  if (method === 'Console.messageAdded' || 
+      method === 'Runtime.consoleAPICalled' || 
+      method === 'Network.responseReceived') {
+    
+    session.logs.push({
+      method: method,
+      params: params,
+      timestamp: Date.now()
+    });
+    
+    send({
+      type: 'debug.event',
+      sessionId: session.sessionId,
+      method: method,
+      params: params
+    });
+  }
+});
+
+// ============================================
+// Utility Functions
+// ============================================
+
+function generateSessionId() {
+  return 'skynet_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+}
+
+async function checkSessionDuration(tabId) {
+  const startTime = tabSessions.get(tabId);
+  return startTime ? Date.now() - startTime : 0;
+}
+
+async function checkTabInteraction(tabId) {
+  // This would require more sophisticated tracking
+  // For now, assume any tab that's been active has had interaction
+  return tabSessions.has(tabId);
+}
+
+function send(message) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(message));
+  }
+}
+
+function updateState(state) {
+  connectionState = state;
+  chrome.runtime.sendMessage({ type: 'state-update', state: state });
+}
+
+// Additional utility functions...
 function disconnect() {
   clearReconnectTimer();
   stopHeartbeat();
@@ -107,291 +638,11 @@ function stopHeartbeat() {
   }
 }
 
-function send(data) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(data));
-    return true;
-  }
-  return false;
-}
-
-function updateState(state) {
-  connectionState = state;
-  // Notify popup if open
-  chrome.runtime.sendMessage({ type: 'state', state }).catch(() => {});
-}
-
 // ============================================
-// Message Handler - Command Router
+// Initialization
 // ============================================
 
-async function handleMessage(msg) {
-  const { action, requestId, ...params } = msg;
-  
-  if (!action) return;
-  
-  let response;
-  try {
-    switch (action) {
-      // Bookmark operations
-      case 'bookmarks.list':
-        response = await bookmarksList();
-        break;
-      case 'bookmarks.search':
-        response = await bookmarksSearch(params.query);
-        break;
-      case 'bookmarks.add':
-        response = await bookmarksAdd(params.url, params.title, params.folder);
-        break;
-      case 'bookmarks.delete':
-        response = await bookmarksDelete(params.id);
-        break;
-      case 'bookmarks.move':
-        response = await bookmarksMove(params.id, params.parentId, params.index);
-        break;
-      case 'bookmarks.duplicates':
-        response = await bookmarksFindDuplicates();
-        break;
-      
-      // Tab operations
-      case 'tabs.list':
-        response = await tabsList();
-        break;
-      case 'tabs.create':
-        response = await tabsCreate(params.url, params.active);
-        break;
-      case 'tabs.close':
-        response = await tabsClose(params.tabId || params.tabIds);
-        break;
-      case 'tabs.focus':
-        response = await tabsFocus(params.tabId);
-        break;
-      case 'tabs.groupByDomain':
-        response = await tabsGroupByDomain();
-        break;
-      
-      // Status
-      case 'status':
-        response = { success: true, data: { state: connectionState, version: '1.0.0' } };
-        break;
-      
-      default:
-        response = { success: false, error: `Unknown action: ${action}` };
-    }
-  } catch (err) {
-    console.error(`[Skynet] Action ${action} failed:`, err);
-    response = { success: false, error: err.message };
-  }
-  
-  // Send response with requestId if provided
-  if (requestId) {
-    response.requestId = requestId;
-  }
-  response.action = action;
-  send(response);
-}
-
-// ============================================
-// Bookmark Operations
-// ============================================
-
-async function bookmarksList() {
-  const tree = await chrome.bookmarks.getTree();
-  return { success: true, data: tree };
-}
-
-async function bookmarksSearch(query) {
-  if (!query) {
-    return { success: false, error: 'Query required' };
-  }
-  const results = await chrome.bookmarks.search(query);
-  return { success: true, data: results };
-}
-
-async function bookmarksAdd(url, title, folder) {
-  if (!url) {
-    return { success: false, error: 'URL required' };
-  }
-  
-  let parentId = '1'; // Default to Bookmarks Bar
-  
-  // If folder specified, find or create it
-  if (folder) {
-    const existing = await chrome.bookmarks.search({ title: folder });
-    const folderNode = existing.find(b => !b.url);
-    if (folderNode) {
-      parentId = folderNode.id;
-    } else {
-      // Create the folder
-      const newFolder = await chrome.bookmarks.create({ parentId: '1', title: folder });
-      parentId = newFolder.id;
-    }
-  }
-  
-  const bookmark = await chrome.bookmarks.create({
-    parentId,
-    title: title || url,
-    url
-  });
-  
-  return { success: true, data: bookmark };
-}
-
-async function bookmarksDelete(id) {
-  if (!id) {
-    return { success: false, error: 'Bookmark ID required' };
-  }
-  await chrome.bookmarks.remove(id);
-  return { success: true };
-}
-
-async function bookmarksMove(id, parentId, index) {
-  if (!id) {
-    return { success: false, error: 'Bookmark ID required' };
-  }
-  const destination = {};
-  if (parentId) destination.parentId = parentId;
-  if (index !== undefined) destination.index = index;
-  
-  const result = await chrome.bookmarks.move(id, destination);
-  return { success: true, data: result };
-}
-
-async function bookmarksFindDuplicates() {
-  const tree = await chrome.bookmarks.getTree();
-  const urlMap = new Map();
-  
-  function traverse(nodes) {
-    for (const node of nodes) {
-      if (node.url) {
-        // Normalize URL for comparison
-        const normalizedUrl = node.url.replace(/\/$/, '').toLowerCase();
-        if (!urlMap.has(normalizedUrl)) {
-          urlMap.set(normalizedUrl, []);
-        }
-        urlMap.set(normalizedUrl, [...urlMap.get(normalizedUrl), {
-          id: node.id,
-          title: node.title,
-          url: node.url,
-          dateAdded: node.dateAdded
-        }]);
-      }
-      if (node.children) {
-        traverse(node.children);
-      }
-    }
-  }
-  
-  traverse(tree);
-  
-  // Filter to only duplicates
-  const duplicates = [];
-  for (const [url, bookmarks] of urlMap) {
-    if (bookmarks.length > 1) {
-      duplicates.push({ url, count: bookmarks.length, bookmarks });
-    }
-  }
-  
-  return { success: true, data: { duplicates, totalDuplicates: duplicates.length } };
-}
-
-// ============================================
-// Tab Operations
-// ============================================
-
-async function tabsList() {
-  const tabs = await chrome.tabs.query({});
-  const simplified = tabs.map(t => ({
-    id: t.id,
-    windowId: t.windowId,
-    title: t.title,
-    url: t.url,
-    active: t.active,
-    pinned: t.pinned,
-    favIconUrl: t.favIconUrl
-  }));
-  return { success: true, data: simplified };
-}
-
-async function tabsCreate(url, active = true) {
-  const tab = await chrome.tabs.create({ url, active });
-  return { success: true, data: { id: tab.id, url: tab.url } };
-}
-
-async function tabsClose(tabIds) {
-  if (!tabIds) {
-    return { success: false, error: 'Tab ID(s) required' };
-  }
-  const ids = Array.isArray(tabIds) ? tabIds : [tabIds];
-  await chrome.tabs.remove(ids);
-  return { success: true, data: { closed: ids.length } };
-}
-
-async function tabsFocus(tabId) {
-  if (!tabId) {
-    return { success: false, error: 'Tab ID required' };
-  }
-  const tab = await chrome.tabs.update(tabId, { active: true });
-  await chrome.windows.update(tab.windowId, { focused: true });
-  return { success: true };
-}
-
-async function tabsGroupByDomain() {
-  const tabs = await chrome.tabs.query({});
-  const domainMap = new Map();
-  
-  for (const tab of tabs) {
-    try {
-      const url = new URL(tab.url);
-      const domain = url.hostname;
-      if (!domainMap.has(domain)) {
-        domainMap.set(domain, []);
-      }
-      domainMap.get(domain).push(tab.id);
-    } catch {
-      // Skip invalid URLs (chrome://, etc.)
-    }
-  }
-  
-  const groups = [];
-  for (const [domain, tabIds] of domainMap) {
-    if (tabIds.length > 1) {
-      groups.push({ domain, count: tabIds.length, tabIds });
-    }
-  }
-  
-  return { success: true, data: { groups, totalGroups: groups.length } };
-}
-
-// ============================================
-// Message Handler for Popup Communication
-// ============================================
-
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === 'getState') {
-    sendResponse({ state: connectionState });
-  } else if (msg.type === 'connect') {
-    connect();
-    sendResponse({ ok: true });
-  } else if (msg.type === 'disconnect') {
-    disconnect();
-    sendResponse({ ok: true });
-  } else if (msg.type === 'getBookmarks') {
-    bookmarksList().then(sendResponse);
-    return true; // async response
-  } else if (msg.type === 'getTabs') {
-    tabsList().then(sendResponse);
-    return true;
-  } else if (msg.type === 'getDuplicates') {
-    bookmarksFindDuplicates().then(sendResponse);
-    return true;
-  }
-  return false;
-});
-
-// ============================================
-// Startup
-// ============================================
-
-console.log('[Skynet] Browser Manager starting...');
+// Start connection when extension loads
 connect();
+
+console.log('[Skynet] Enhanced Browser Manager initialized');

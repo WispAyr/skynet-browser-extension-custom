@@ -1,104 +1,180 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=400">
-  <title>Skynet Browser Manager</title>
-  <link rel="stylesheet" href="popup.css">
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="enhanced-popup.css">
 </head>
 <body>
-  <div class="lcars-container">
-    <!-- Header -->
-    <header class="lcars-header">
-      <div class="lcars-elbow-left"></div>
-      <div class="lcars-title">
-        <span class="title-text">SKYNET BROWSER</span>
-        <span class="subtitle">CONTROL INTERFACE</span>
+  <div class="container">
+    <!-- Header with connection status -->
+    <div class="header">
+      <div class="title">🤖 SKYNET ENHANCED</div>
+      <div class="status" id="status">
+        <div class="status-indicator" id="statusIndicator"></div>
+        <span id="statusText">CONNECTING</span>
       </div>
-      <div class="lcars-elbow-right"></div>
-    </header>
-
-    <!-- Status Bar -->
-    <div class="status-bar">
-      <div class="status-indicator">
-        <span class="status-dot" id="statusDot"></span>
-        <span class="status-text" id="statusText">INITIALIZING</span>
-      </div>
-      <button class="lcars-btn-small" id="connectBtn">CONNECT</button>
     </div>
 
-    <!-- Tab Navigation -->
-    <nav class="lcars-tabs">
-      <button class="tab-btn active" data-tab="bookmarks">BOOKMARKS</button>
-      <button class="tab-btn" data-tab="tabs">TABS</button>
-      <button class="tab-btn" data-tab="tools">TOOLS</button>
-    </nav>
+    <!-- Navigation tabs -->
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-tab="dashboard">Dashboard</button>
+      <button class="nav-tab" data-tab="bookmarks">Bookmarks</button>
+      <button class="nav-tab" data-tab="tabs">Tabs</button>
+      <button class="nav-tab" data-tab="collaboration">Collaborate</button>
+      <button class="nav-tab" data-tab="debug">Debug</button>
+    </div>
 
-    <!-- Content Panels -->
-    <main class="content-area">
-      <!-- Bookmarks Panel -->
-      <section id="bookmarks-panel" class="panel active">
-        <div class="panel-header">
-          <span class="panel-title">BOOKMARK DATABASE</span>
-          <button class="lcars-btn-small" id="refreshBookmarks">↻</button>
-        </div>
-        <div class="search-bar">
-          <input type="text" id="bookmarkSearch" placeholder="Search bookmarks...">
-        </div>
-        <div class="list-container" id="bookmarkList">
-          <div class="loading">Loading...</div>
-        </div>
-        <div class="stats-bar">
-          <span id="bookmarkCount">0 bookmarks</span>
-        </div>
-      </section>
-
-      <!-- Tabs Panel -->
-      <section id="tabs-panel" class="panel">
-        <div class="panel-header">
-          <span class="panel-title">ACTIVE TABS</span>
-          <button class="lcars-btn-small" id="refreshTabs">↻</button>
-        </div>
-        <div class="list-container" id="tabList">
-          <div class="loading">Loading...</div>
-        </div>
-        <div class="stats-bar">
-          <span id="tabCount">0 tabs</span>
-        </div>
-      </section>
-
-      <!-- Tools Panel -->
-      <section id="tools-panel" class="panel">
-        <div class="panel-header">
-          <span class="panel-title">UTILITIES</span>
-        </div>
-        <div class="tools-grid">
-          <button class="tool-btn" id="findDuplicates">
-            <span class="tool-icon">⚡</span>
-            <span class="tool-label">Find Duplicates</span>
+    <!-- Dashboard Tab -->
+    <div class="tab-content active" id="dashboard">
+      <div class="section">
+        <h3>🚀 Quick Actions</h3>
+        <div class="button-grid">
+          <button class="action-btn" id="enableAutoBookmark">
+            <span class="btn-icon">📚</span>
+            <span>Auto-Bookmark</span>
+            <span class="status-badge" id="autoBookmarkStatus">OFF</span>
           </button>
-          <button class="tool-btn" id="groupTabs">
-            <span class="tool-icon">◫</span>
-            <span class="tool-label">Group by Domain</span>
+          <button class="action-btn" id="createSharedTab">
+            <span class="btn-icon">🤝</span>
+            <span>Share Current Tab</span>
           </button>
-          <button class="tool-btn" id="exportBookmarks">
-            <span class="tool-icon">↓</span>
-            <span class="tool-label">Export Data</span>
+          <button class="action-btn" id="enableDebug">
+            <span class="btn-icon">🔧</span>
+            <span>Enable Debugging</span>
+          </button>
+          <button class="action-btn" id="exportBookmarks">
+            <span class="btn-icon">💾</span>
+            <span>Export Data</span>
           </button>
         </div>
-        <div class="results-area" id="toolResults">
-          <div class="placeholder">Select a tool to run</div>
+      </div>
+      
+      <div class="section">
+        <h3>📊 Session Stats</h3>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-number" id="autoBookmarksCount">0</div>
+            <div class="stat-label">Auto-Bookmarks</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="sharedTabsCount">0</div>
+            <div class="stat-label">Shared Tabs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="debugSessionsCount">0</div>
+            <div class="stat-label">Debug Sessions</div>
+          </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
+
+    <!-- Bookmarks Tab -->
+    <div class="tab-content" id="bookmarks">
+      <div class="section">
+        <div class="search-container">
+          <input type="text" id="bookmarkSearch" placeholder="Search bookmarks..." class="search-input">
+        </div>
+        <div class="bookmark-actions">
+          <button class="mini-btn" id="findDuplicates">Find Duplicates</button>
+          <button class="mini-btn" id="sortBookmarks">Sort A-Z</button>
+          <button class="mini-btn" id="cleanupBookmarks">Cleanup</button>
+        </div>
+        <div id="bookmarkList" class="item-list">
+          <div class="loading">Loading bookmarks...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs Tab -->
+    <div class="tab-content" id="tabs">
+      <div class="section">
+        <div class="tab-actions">
+          <button class="mini-btn" id="groupByDomain">Group by Domain</button>
+          <button class="mini-btn" id="closeInactive">Close Inactive</button>
+          <button class="mini-btn" id="duplicateTabs">Find Duplicates</button>
+        </div>
+        <div id="tabList" class="item-list">
+          <div class="loading">Loading tabs...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collaboration Tab -->
+    <div class="tab-content" id="collaboration">
+      <div class="section">
+        <h3>🤝 Shared Sessions</h3>
+        <div class="collab-controls">
+          <input type="text" id="sessionNameInput" placeholder="Session name (optional)" class="text-input">
+          <button class="action-btn full-width" id="shareCurrentTab">
+            <span class="btn-icon">🌐</span>
+            Share Current Tab
+          </button>
+        </div>
+        
+        <div id="sharedSessionsList" class="sessions-list">
+          <div class="empty-state">No active shared sessions</div>
+        </div>
+        
+        <div class="section">
+          <h4>🎛️ Collaboration Tools</h4>
+          <div class="tool-grid">
+            <button class="tool-btn" id="syncScroll">Sync Scroll</button>
+            <button class="tool-btn" id="shareClicks">Share Clicks</button>
+            <button class="tool-btn" id="voiceChat">Voice Chat</button>
+            <button class="tool-btn" id="screenShare">Screen Share</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Debug Tab -->
+    <div class="tab-content" id="debug">
+      <div class="section">
+        <h3>🔧 Remote Debugging</h3>
+        <div class="debug-controls">
+          <div class="checkbox-group">
+            <label><input type="checkbox" id="debugConsole" checked> Console Logs</label>
+            <label><input type="checkbox" id="debugNetwork" checked> Network Monitor</label>
+            <label><input type="checkbox" id="debugRuntime" checked> Runtime Events</label>
+            <label><input type="checkbox" id="debugDOM" checked> DOM Changes</label>
+            <label><input type="checkbox" id="debugPerf"> Performance</label>
+          </div>
+          
+          <button class="action-btn full-width" id="startDebugging">
+            <span class="btn-icon">🚀</span>
+            Start Debug Session
+          </button>
+        </div>
+        
+        <div class="section">
+          <h4>📝 Debug Console</h4>
+          <div class="console-container">
+            <div id="debugConsole" class="debug-console">
+              <div class="console-line">Debug session not active</div>
+            </div>
+            <div class="console-input-container">
+              <input type="text" id="consoleInput" placeholder="Execute JavaScript..." class="console-input">
+              <button id="executeCommand" class="execute-btn">Run</button>
+            </div>
+          </div>
+        </div>
+        
+        <div id="debugSessionsList" class="sessions-list">
+          <div class="empty-state">No active debug sessions</div>
+        </div>
+      </div>
+    </div>
 
     <!-- Footer -->
-    <footer class="lcars-footer">
-      <div class="footer-bar"></div>
-      <span class="version">v1.0.0</span>
-    </footer>
+    <div class="footer">
+      <div class="server-info">
+        <span>📡 Server: 10.10.10.123:18789</span>
+        <span id="connectionTime">00:00:00</span>
+      </div>
+      <div class="version-info">v2.0.0 Enhanced</div>
+    </div>
   </div>
 
-  <script src="popup.js"></script>
+  <script src="enhanced-popup.js"></script>
 </body>
 </html>
